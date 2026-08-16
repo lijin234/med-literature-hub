@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>医学文献管理台</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+:root{
+  --primary:#0891b2;--primary-dark:#0e7490;--primary-light:#e0f7fa;
+  --secondary:#1e3a5f;--accent:#14b8a6;
+  --en-color:#2563eb;--en-bg:#dbeafe;--zh-color:#059669;--zh-bg:#d1fae5;
+  --danger:#dc2626;--danger-bg:#fee2e2;
+  --bg:#f1f5f9;--card:#ffffff;--border:#e2e8f0;
+  --text:#1e293b;--text-light:#64748b;--text-muted:#94a3b8;
+  --shadow:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
+  --shadow-lg:0 10px 30px rgba(0,0,0,.1);
+  --radius:12px;--radius-sm:8px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:#94a3b8}
+
+/* Sidebar */
+.sidebar{position:fixed;top:0;left:0;width:240px;height:100vh;background:linear-gradient(180deg,#0f4c5c 0%,#0e7490 100%);color:#fff;padding:24px 0;display:flex;flex-direction:column;z-index:100}
+.sidebar-logo{padding:0 24px 24px;border-bottom:1px solid rgba(255,255,255,.15)}
+.sidebar-logo h1{font-size:20px;font-weight:700;display:flex;align-items:center;gap:8px}
+.sidebar-logo p{font-size:12px;opacity:.7;margin-top:4px}
+.nav{flex:1;padding:16px 12px;display:flex;flex-direction:column;gap:4px}
+.nav-item{display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:var(--radius-sm);cursor:pointer;color:rgba(255,255,255,.75);font-size:14px;font-weight:500;transition:all .2s;border:none;background:none;width:100%;text-align:left}
+.nav-item:hover{background:rgba(255,255,255,.1);color:#fff}
+.nav-item.active{background:rgba(255,255,255,.18);color:#fff}
+.nav-item .icon{font-size:18px;width:24px;text-align:center}
+.sidebar-footer{padding:16px 24px;font-size:11px;opacity:.5;border-top:1px solid rgba(255,255,255,.15)}
+
+/* Main */
+.main{margin-left:240px;min-height:100vh;padding:32px}
+.section{display:none;animation:fadeIn .3s ease}
+.section.active{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.section-header{margin-bottom:24px}
+.section-header h2{font-size:24px;font-weight:700;color:var(--secondary)}
+.section-header p{color:var(--text-light);font-size:14px;margin-top:4px}
+
+/* Search hub */
+.search-bar{position:relative;margin-bottom:20px}
+.search-bar input{width:100%;padding:12px 16px 12px 44px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:14px;background:var(--card);transition:border-color .2s}
+.search-bar input:focus{outline:none;border-color:var(--primary)}
+.search-bar .search-icon{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:18px}
+.cat-tabs{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap}
+.cat-tab{padding:8px 16px;border-radius:20px;border:1.5px solid var(--border);background:var(--card);cursor:pointer;font-size:13px;font-weight:500;color:var(--text-light);transition:all .2s}
+.cat-tab:hover{border-color:var(--primary);color:var(--primary)}
+.cat-tab.active{background:var(--primary);border-color:var(--primary);color:#fff}
+.db-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+.db-card{background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius);padding:20px;cursor:pointer;transition:all .25s;display:flex;flex-direction:column;gap:8px;text-decoration:none;color:inherit;position:relative;overflow:hidden}
+.db-card::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:var(--primary);transform:scaleX(0);transform-origin:left;transition:transform .3s}
+.db-card:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg);border-color:var(--primary)}
+.db-card:hover::before{transform:scaleX(1)}
+.db-card .db-icon{font-size:28px}
+.db-card .db-name{font-size:16px;font-weight:700;color:var(--secondary)}
+.db-card .db-desc{font-size:12px;color:var(--text-light);line-height:1.5}
+.db-card .db-cat{font-size:10px;color:var(--primary);font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+
+/* Library */
+.upload-zone{border:2px dashed var(--border);border-radius:var(--radius);padding:40px;text-align:center;cursor:pointer;transition:all .25s;background:var(--card);margin-bottom:24px}
+.upload-zone:hover,.upload-zone.dragover{border-color:var(--primary);background:var(--primary-light)}
+.upload-zone .up-icon{font-size:40px;margin-bottom:8px}
+.upload-zone h3{font-size:16px;color:var(--secondary);margin-bottom:4px}
+.upload-zone p{font-size:13px;color:var(--text-light)}
+.upload-zone .hint{font-size:11px;color:var(--text-muted);margin-top:8px}
+.stats-bar{display:flex;gap:16px;margin-bottom:20px;flex-wrap:wrap}
+.stat-card{background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:16px 24px;flex:1;min-width:140px}
+.stat-card .stat-num{font-size:28px;font-weight:700;color:var(--secondary)}
+.stat-card .stat-label{font-size:12px;color:var(--text-light);margin-top:2px}
+.stat-card.en .stat-num{color:var(--en-color)}
+.stat-card.zh .stat-num{color:var(--zh-color)}
+.filter-bar{display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;align-items:center}
+.filter-bar input,.filter-bar select{padding:8px 12px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--card)}
+.filter-bar input{flex:1;min-width:200px}
+.filter-bar input:focus,.filter-bar select:focus{outline:none;border-color:var(--primary)}
+.paper-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.paper-card{background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius);padding:18px;cursor:pointer;transition:all .2s;display:flex;flex-direction:column;gap:10px}
+.paper-card:hover{box-shadow:var(--shadow-lg);border-color:var(--primary);transform:translateY(-2px)}
+.paper-card .p-header{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.paper-card .p-title{font-size:14px;font-weight:600;color:var(--secondary);line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.lang-badge{font-size:10px;font-weight:700;padding:3px 8px;border-radius:10px;white-space:nowrap;flex-shrink:0}
+.lang-badge.en{background:var(--en-bg);color:var(--en-color)}
+.lang-badge.zh{background:var(--zh-bg);color:var(--zh-color)}
+.paper-card .p-meta{font-size:11px;color:var(--text-muted);display:flex;flex-direction:column;gap:2px}
+.paper-card .p-tags{display:flex;gap:4px;flex-wrap:wrap}
+.tag-chip{font-size:10px;padding:2px 8px;border-radius:10px;background:#f1f5f9;color:var(--text-light)}
+.paper-card .p-footer{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text-muted);margin-top:auto;padding-top:8px;border-top:1px solid var(--border)}
+.empty-state{text-align:center;padding:60px 20px;color:var(--text-muted)}
+.empty-state .e-icon{font-size:48px;margin-bottom:12px;opacity:.4}
+
+/* Modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,.6);backdrop-filter:blur(4px);z-index:200;display:none;align-items:center;justify-content:center;padding:20px}
+.modal-overlay.active{display:flex}
+.modal{background:var(--card);border-radius:var(--radius);width:100%;max-width:760px;max-height:85vh;display:flex;flex-direction:column;box-shadow:var(--shadow-lg);animation:modalIn .3s ease}
+@keyframes modalIn{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
+.modal-header{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.modal-header h3{font-size:18px;color:var(--secondary)}
+.modal-close{background:none;border:none;font-size:24px;cursor:pointer;color:var(--text-muted);line-height:1;padding:4px}
+.modal-close:hover{color:var(--danger)}
+.modal-body{padding:24px;overflow-y:auto;flex:1}
+.modal-footer{padding:16px 24px;border-top:1px solid var(--border);display:flex;gap:12px;justify-content:flex-end}
+
+/* Buttons */
+.btn{padding:10px 20px;border-radius:var(--radius-sm);border:none;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;display:inline-flex;align-items:center;gap:6px}
+.btn-primary{background:var(--primary);color:#fff}
+.btn-primary:hover{background:var(--primary-dark)}
+.btn-outline{background:var(--card);border:1.5px solid var(--border);color:var(--text)}
+.btn-outline:hover{border-color:var(--primary);color:var(--primary)}
+.btn-danger{background:var(--danger-bg);color:var(--danger)}
+.btn-danger:hover{background:var(--danger);color:#fff}
+.btn-sm{padding:6px 12px;font-size:12px}
+
+/* Detail view */
+.detail-row{display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap}
+.detail-field{flex:1;min-width:200px}
+.detail-field label{font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px}
+.detail-field input,.detail-field select,.detail-field textarea{width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit}
+.detail-field input:focus,.detail-field select:focus,.detail-field textarea:focus{outline:none;border-color:var(--primary)}
+.detail-field textarea{resize:vertical;min-height:80px}
+.tags-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px}
+.tag-pill{display:inline-flex;align-items:center;gap:4px;font-size:12px;padding:4px 10px;border-radius:12px;background:#f1f5f9;color:var(--text-light)}
+.tag-pill .remove{cursor:pointer;font-weight:bold;opacity:.5}
+.tag-pill .remove:hover{opacity:1;color:var(--danger)}
+.tag-add-input{border:1px dashed var(--border);border-radius:12px;padding:4px 10px;font-size:12px;width:100px;outline:none}
+.text-block{background:#f8fafc;border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;margin-top:12px;max-height:300px;overflow-y:auto;font-size:13px;line-height:1.7;white-space:pre-wrap}
+.text-block.translated{background:#fefce8;border-color:#fde68a}
+.progress-wrap{margin-top:12px}
+.progress-bar{height:6px;background:var(--border);border-radius:3px;overflow:hidden}
+.progress-fill{height:100%;background:var(--primary);transition:width .3s;border-radius:3px}
+.progress-text{font-size:12px;color:var(--text-light);margin-top:4px;text-align:center}
+.translator-links{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-top:16px}
+.translator-link{display:flex;align-items:center;gap:8px;padding:10px 14px;border:1.5px solid var(--border);border-radius:var(--radius-sm);text-decoration:none;color:var(--text);font-size:13px;transition:all .2s}
+.translator-link:hover{border-color:var(--primary);background:var(--primary-light);color:var(--primary-dark)}
+.section-divider{margin:20px 0;height:1px;background:var(--border)}
+.section-divider-label{font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+
+/* Toast */
+.toast{position:fixed;bottom:24px;right:24px;background:var(--secondary);color:#fff;padding:12px 20px;border-radius:var(--radius-sm);font-size:13px;box-shadow:var(--shadow-lg);z-index:300;transform:translateX(120%);transition:transform .3s;max-width:360px}
+.toast.show{transform:translateX(0)}
+.toast.success{background:#059669}
+.toast.error{background:var(--danger)}
+.toast.info{background:var(--primary)}
+
+/* Translation tool */
+.trans-tool-box{background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius);padding:24px;margin-bottom:20px}
+.trans-tool-box h3{font-size:16px;color:var(--secondary);margin-bottom:12px}
+.trans-pair{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.trans-pair textarea{width:100%;min-height:140px;padding:14px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;resize:vertical;line-height:1.6}
+.trans-pair textarea:focus{outline:none;border-color:var(--primary)}
+.trans-pair .trans-output{background:#f8fafc}
+.guide-box{background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius);padding:24px}
+.guide-box h3{font-size:18px;color:var(--secondary);margin-bottom:16px}
+.guide-step{display:flex;gap:14px;margin-bottom:16px;align-items:flex-start}
+.guide-step .step-num{flex-shrink:0;width:28px;height:28px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700}
+.guide-step .step-content h4{font-size:14px;color:var(--secondary);margin-bottom:2px}
+.guide-step .step-content p{font-size:13px;color:var(--text-light)}
+.note-box{background:#fffbeb;border:1px solid #fde68a;border-radius:var(--radius-sm);padding:14px 16px;font-size:12px;color:#92400e;line-height:1.6;margin-top:16px}
+.note-box strong{color:#78350f}
+@media(max-width:768px){
+  .sidebar{width:60px}.sidebar-logo h1,.sidebar-logo p,.nav-item span:not(.icon),.sidebar-footer{display:none}
+  .main{margin-left:60px;padding:16px}
+  .trans-pair{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <h1>🩺 文献管理台</h1>
+    <p>医学文献 · 搜索 · 管理 · 翻译</p>
+  </div>
+  <nav class="nav">
+    <button class="nav-item active" data-section="search"><span class="icon">🔍</span><span>文献搜索</span></button>
+    <button class="nav-item" data-section="library"><span class="icon">📚</span><span>我的文献库</span></button>
+    <button class="nav-item" data-section="translate"><span class="icon">🌐</span><span>翻译助手</span></button>
+    <button class="nav-item" data-section="guide"><span class="icon">📖</span><span>使用说明</span></button>
+  </nav>
+  <div class="sidebar-footer">数据本地存储 · 无需联网即可管理</div>
+</aside>
+
+<main class="main">
+  <!-- 搜索 -->
+  <section class="section active" id="sec-search">
+    <div class="section-header">
+      <h2>文献搜索导航</h2>
+      <p>收录常用中英文医学文献数据库，点击卡片即可跳转检索</p>
+    </div>
+    <div class="search-bar">
+      <span class="search-icon">🔎</span>
+      <input type="text" id="dbSearch" placeholder="搜索数据库名称或关键词…">
+    </div>
+    <div class="cat-tabs" id="catTabs"></div>
+    <div class="db-grid" id="dbGrid"></div>
+  </section>
+
+  <!-- 文献库 -->
+  <section class="section" id="sec-library">
+    <div class="section-header">
+      <h2>我的文献库</h2>
+      <p>拖入 PDF 文件即可自动提取文本、识别语言、分类整理</p>
+    </div>
+    <div class="upload-zone" id="uploadZone">
+      <div class="up-icon">📄⬇️</div>
+      <h3>拖拽 PDF 文件到此处，或点击选择文件</h3>
+      <p>支持多文件批量上传，自动提取文本并分类</p>
+      <p class="hint">文件保存在浏览器本地存储中，仅你可访问</p>
+      <input type="file" id="fileInput" accept=".pdf" multiple style="display:none">
+    </div>
+    <div class="stats-bar" id="statsBar"></div>
+    <div class="filter-bar">
+      <input type="text" id="paperSearch" placeholder="搜索标题、标签…">
+      <select id="filterLang"><option value="all">全部语言</option><option value="en">英文</option><option value="zh">中文</option></select>
+      <select id="filterTag"><option value="all">全部标签</option></select>
+      <select id="sortBy">
+        <option value="date-desc">最近添加</option>
+        <option value="date-asc">最早添加</option>
+        <option value="title-asc">标题 A-Z</option>
+      </select>
+    </div>
+    <div id="paperGridWrap"></div>
+  </section>
+
+  <!-- 翻译 -->
+  <section class="section" id="sec-translate">
+    <div class="section-header">
+      <h2>翻译助手</h2>
+      <p>粘贴英文文本即时翻译为中文，或在文献库中点击「翻译」自动处理</p>
+    </div>
+    <div class="trans-tool-box">
+      <h3>即时文本翻译（英 → 中）</h3>
+      <div class="trans-pair">
+        <textarea id="transInput" placeholder="在此粘贴英文文本…"></textarea>
+        <textarea class="trans-output" id="transOutput" placeholder="中文翻译结果将显示于此…" readonly></textarea>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:10px;align-items:center">
+        <button class="btn btn-primary btn-sm" id="transBtn">开始翻译</button>
+        <button class="btn btn-outline btn-sm" id="transClearBtn">清空</button>
+        <span id="transStatus" style="font-size:12px;color:var(--text-light)"></span>
+      </div>
+    </div>
+    <div class="section-header" style="margin-top:8px">
+      <h3 style="font-size:18px;color:var(--secondary)">整篇文档翻译工具</h3>
+      <p>如需翻译完整 PDF，可使用以下在线文档翻译服务</p>
+    </div>
+    <div class="translator-links" id="translatorLinks"></div>
+  </section>
+
+  <!-- 说明 -->
+  <section class="section" id="sec-guide">
+    <div class="section-header">
+      <h2>使用说明</h2>
+      <p>快速了解本工具的核心功能与工作流程</p>
+    </div>
+    <div class="guide-box">
+      <div class="guide-step"><div class="step-num">1</div><div class="step-content"><h4>查找文献</h4><p>在「文献搜索」页面，点击任意数据库卡片即可在新标签页打开该网站进行检索。可按分类筛选或搜索快速定位。</p></div></div>
+      <div class="guide-step"><div class="step-num">2</div><div class="step-content"><h4>下载并整理文献</h4><p>从数据库下载 PDF 后，切换到「我的文献库」，将 PDF 文件拖入上传区。系统会自动提取文本内容、识别文献语言（中文/英文），并归入相应分类。</p></div></div>
+      <div class="guide-step"><div class="step-num">3</div><div class="step-content"><h4>管理文献</h4><p>在文献库中可按语言、标签筛选，按标题或日期排序。点击任意文献卡片可查看详情、编辑标题、添加标签与笔记、在线打开 PDF。</p></div></div>
+      <div class="guide-step"><div class="step-num">4</div><div class="step-content"><h4>翻译英文文献</h4><p>在文献详情中点击「提取并翻译」按钮，系统会自动提取 PDF 文本并逐段翻译为中文。也可在「翻译助手」页面直接粘贴文本翻译，或使用整篇文档翻译工具链接。</p></div></div>
+      <div class="note-box"><strong>⚠️ 数据存储说明：</strong>所有文献文件存储在你浏览器的本地数据库（IndexedDB）中，不会上传到任何服务器。建议固定使用同一浏览器，并避免清除浏览器数据以防文献丢失。数据仅保存在本台电脑的此浏览器中。</div>
+      <div class="note-box" style="background:#f0fdf4;border-color:#bbf7d0;color:#166534"><strong>💡 翻译提示：</strong>在线翻译使用免费翻译接口，单次翻译有字数限制，建议优先翻译摘要部分。完整文档翻译可使用下方提供的专业工具链接。</div>
+    </div>
+  </section>
+</main>
+
+<!-- 详情弹窗 -->
+<div class="modal-overlay" id="detailModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>文献详情</h3>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div class="modal-body" id="detailBody"></div>
+    <div class="modal-footer" id="detailFooter"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ========== PDF.js 配置 ========== */
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+/* ========== 数据库列表 ========== */
+const DATABASES = [
+  {name:'PubMed',url:'https://pubmed.ncbi.nlm.nih.gov/',desc:'美国国家医学图书馆，生物医学文献权威数据库',cat:'en',icon:'🔬'},
+  {name:'Google Scholar',url:'https://scholar.google.com/',desc:'谷歌学术，覆盖多学科的学术搜索引擎',cat:'en',icon:'🎓'},
+  {name:'ScienceDirect',url:'https://www.sciencedirect.com/',desc:'爱思唯尔旗下全文期刊与图书数据库',cat:'en',icon:'📚'},
+  {name:'Web of Science',url:'https://www.webofscience.com/',desc:'引文索引数据库，可查影响因子与被引',cat:'en',icon:'🌐'},
+  {name:'Scopus',url:'https://www.scopus.com/',desc:'Elsevier 摘要与引文数据库，覆盖广泛',cat:'en',icon:'📊'},
+  {name:'Wiley Online',url:'https://onlinelibrary.wiley.com/',desc:'Wiley 出版社在线期刊全文库',cat:'en',icon:'📖'},
+  {name:'SpringerLink',url:'https://link.springer.com/',desc:'Springer 期刊、丛书与图书',cat:'en',icon:'📑'},
+  {name:'中国知网 CNKI',url:'https://www.cnki.net/',desc:'中文学术文献综合检索平台',cat:'zh',icon:'📘'},
+  {name:'万方数据',url:'https://www.wanfangdata.com.cn/',desc:'中文学位论文、期刊与会议文献',cat:'zh',icon:'📕'},
+  {name:'维普资讯',url:'http://www.cqvip.com/',desc:'中文科技期刊全文数据库',cat:'zh',icon:'📗'},
+  {name:'百度学术',url:'https://xueshu.baidu.com/',desc:'百度学术搜索，免费检索中英文文献',cat:'zh',icon:'🔍'},
+  {name:'SinoMed',url:'http://www.sinomed.ac.cn/',desc:'中国生物医学文献服务系统',cat:'zh',icon:'🏥'},
+  {name:'bioRxiv',url:'https://www.biorxiv.org/',desc:'生物学预印本平台',cat:'preprint',icon:'🧬'},
+  {name:'medRxiv',url:'https://www.medrxiv.org/',desc:'医学与健康科学预印本平台',cat:'preprint',icon:'💊'},
+  {name:'Nature',url:'https://www.nature.com/',desc:'《自然》期刊及其子刊',cat:'journal',icon:'🌿'},
+  {name:'The Lancet',url:'https://www.thelancet.com/',desc:'《柳叶刀》——顶级综合医学期刊',cat:'journal',icon:'⚔️'},
+  {name:'NEJM',url:'https://www.nejm.org/',desc:'《新英格兰医学杂志》',cat:'journal',icon:'📰'},
+  {name:'JAMA',url:'https://jamanetwork.com/',desc:'《美国医学会杂志》',cat:'journal',icon:'📄'},
+  {name:'BMJ',url:'https://www.bmj.com/',desc:'《英国医学杂志》',cat:'journal',icon:'📋'},
+  {name:'Cochrane Library',url:'https://www.cochranelibrary.com/',desc:'循证医学系统评价数据库',cat:'clinical',icon:'✅'},
+  {name:'ClinicalTrials.gov',url:'https://clinicaltrials.gov/',desc:'临床试验注册与结果数据库',cat:'clinical',icon:'⚕️'},
+];
+const CAT_LABELS = {all:'全部',en:'英文数据库',zh:'中文数据库',preprint:'预印本',journal:'顶级期刊',clinical:'临床资源'};
+
+const TRANSLATOR_LINKS = [
+  {name:'Google 翻译',url:'https://translate.google.com/?sl=en&tl=zh-CN&op=docs',icon:'🌍',desc:'支持文档翻译'},
+  {name:'DeepL 翻译',url:'https://www.deepl.com/translator/files',icon:'🤖',desc:'高质量机器翻译'},
+  {name:'有道翻译',url:'https://fanyi.youdao.com/',icon:'📘',desc:'中英互译'},
+  {name:'百度翻译',url:'https://fanyi.baidu.com/',icon:'🔍',desc:'支持文档翻译'},
+  {name:'知云文献翻译',url:'https://www.zhiyunwenxian.cn/',icon:'☁️',desc:'科研文献翻译工具'},
+  {name:'CopyTranslator',url:'https://copytranslator.github.io/',icon:'📋',desc:'复制即翻译工具'},
+];
+
+/* ========== IndexedDB ========== */
+const DB_NAME='medLiteratureDB',DB_VERSION=1,STORE='papers';
+let db;
+function openDB(){
+  return new Promise((resolve,reject)=>{
+    const req=indexedDB.open(DB_NAME,DB_VERSION);
+    req.onupgradeneeded=e=>{
+      const d=e.target.result;
+      if(!d.objectStoreNames.contains(STORE)){
+        const s=d.createObjectStore(STORE,{keyPath:'id',autoIncrement:true});
+        s.createIndex('language','language',{unique:false});
+        s.createIndex('dateAdded','dateAdded',{unique:false});
+      }
+    };
+    req.onsuccess=e=>{db=e.target.result;resolve(db)};
+    req.onerror=e=>reject(e.target.error);
+  });
+}
+function dbAdd(paper){
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(STORE,'readwrite');
+    const req=tx.objectStore(STORE).add(paper);
+    req.onsuccess=()=>resolve(req.result);
+    req.onerror=()=>reject(req.error);
+  });
+}
+function dbGetAll(){
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(STORE,'readonly');
+    const req=tx.objectStore(STORE).getAll();
+    req.onsuccess=()=>resolve(req.result||[]);
+    req.onerror=()=>reject(req.error);
+  });
+}
+function dbGet(id){
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(STORE,'readonly');
+    const req=tx.objectStore(STORE).get(id);
+    req.onsuccess=()=>resolve(req.result);
+    req.onerror=()=>reject(req.error);
+  });
+}
+function dbUpdate(paper){
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(STORE,'readwrite');
+    const req=tx.objectStore(STORE).put(paper);
+    req.onsuccess=()=>resolve();
+    req.onerror=()=>reject(req.error);
+  });
+}
+function dbDelete(id){
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(STORE,'readwrite');
+    const req=tx.objectStore(STORE).delete(id);
+    req.onsuccess=()=>resolve();
+    req.onerror=()=>reject(req.error);
+  });
+}
+
+/* ========== State ========== */
+let allPapers=[];
+let currentCat='all';
+let currentPaper=null;
+let filters={search:'',lang:'all',tag:'all',sort:'date-desc'};
+
+/* ========== 导航 ========== */
+document.querySelectorAll('.nav-item').forEach(item=>{
+  item.addEventListener('click',()=>{
+    const sec=item.dataset.section;
+    document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+    item.classList.add('active');
+    document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+    document.getElementById('sec-'+sec).classList.add('active');
+    if(sec==='library') renderLibrary();
+  });
+});
+
+/* ========== 搜索导航 ========== */
+function renderCatTabs(){
+  const cats=['all','en','zh','preprint','journal','clinical'];
+  document.getElementById('catTabs').innerHTML=cats.map(c=>
+    `<div class="cat-tab ${c===currentCat?'active':''}" data-cat="${c}">${CAT_LABELS[c]}</div>`
+  ).join('');
+  document.querySelectorAll('.cat-tab').forEach(t=>{
+    t.addEventListener('click',()=>{currentCat=t.dataset.cat;renderCatTabs();renderDbGrid()});
+  });
+}
+function renderDbGrid(){
+  const kw=document.getElementById('dbSearch').value.toLowerCase().trim();
+  let list=DATABASES.filter(d=>currentCat==='all'||d.cat===currentCat);
+  if(kw) list=list.filter(d=>(d.name+' '+d.desc).toLowerCase().includes(kw));
+  if(!list.length){document.getElementById('dbGrid').innerHTML='<div class="empty-state"><div class="e-icon">🔍</div><p>未找到匹配的数据库</p></div>';return}
+  document.getElementById('dbGrid').innerHTML=list.map(d=>
+    `<a class="db-card" href="${d.url}" target="_blank" rel="noopener">
+      <span class="db-cat">${CAT_LABELS[d.cat]}</span>
+      <span class="db-icon">${d.icon}</span>
+      <span class="db-name">${d.name}</span>
+      <span class="db-desc">${d.desc}</span>
+    </a>`
+  ).join('');
+}
+document.getElementById('dbSearch').addEventListener('input',renderDbGrid);
+
+/* ========== PDF 工具 ========== */
+async function extractPDFText(blob){
+  const buf=await blob.arrayBuffer();
+  const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+  let text='';
+  const maxPages=Math.min(pdf.numPages,30);
+  for(let i=1;i<=maxPages;i++){
+    const page=await pdf.getPage(i);
+    const content=await page.getTextContent();
+    text+=content.items.map(it=>it.str).join(' ')+'\n\n';
+  }
+  return{text:text.trim(),pages:pdf.numPages};
+}
+function detectLanguage(text){
+  const sample=text.substring(0,2000);
+  const cjk=(sample.match(/[\u4e00-\u9fff]/g)||[]).length;
+  const latin=(sample.match(/[a-zA-Z]/g)||[]).length;
+  if(cjk>latin*0.5&&cjk>10) return'zh';
+  if(latin>20) return'en';
+  return'other';
+}
+function guessTitle(text,fileName){
+  const lines=text.split('\n').map(l=>l.trim()).filter(l=>l.length>8&&l.length<300);
+  for(const l of lines){
+    if(/^[A-Z]/.test(l)&&!/^(abstract|introduction|methods?|results?|discussion|keywords?|background|purpose|objective)/i.test(l)) return l.substring(0,200);
+  }
+  if(lines.length) return lines[0].substring(0,200);
+  return fileName.replace(/\.pdf$/i,'');
+}
+
+/* ========== 上传 ========== */
+const uploadZone=document.getElementById('uploadZone');
+const fileInput=document.getElementById('fileInput');
+uploadZone.addEventListener('click',()=>fileInput.click());
+uploadZone.addEventListener('dragover',e=>{e.preventDefault();uploadZone.classList.add('dragover')});
+uploadZone.addEventListener('dragleave',()=>uploadZone.classList.remove('dragover'));
+uploadZone.addEventListener('drop',e=>{e.preventDefault();uploadZone.classList.remove('dragover');handleFiles(e.dataTransfer.files)});
+fileInput.addEventListener('change',e=>{handleFiles(e.target.files);fileInput.value=''});
+
+async function handleFiles(files){
+  const pdfs=[...files].filter(f=>f.type==='application/pdf'||f.name.toLowerCase().endsWith('.pdf'));
+  if(!pdfs.length){toast('请选择 PDF 文件','error');return}
+  toast(`正在处理 ${pdfs.length} 个文件…`,'info');
+  for(const file of pdfs){
+    try{
+      uploadZone.querySelector('h3').textContent=`正在处理：${file.name}`;
+      const {text,pages}=await extractPDFText(file);
+      const lang=detectLanguage(text);
+      const title=guessTitle(text,file.name);
+      const paper={
+        title,fileName:file.name,fileSize:file.size,fileBlob:file,
+        language:lang,pages,dateAdded:new Date().toISOString(),
+        tags:lang==='en'?['英文文献']:(lang==='zh'?['中文文献']:['其他']),
+        source:'',notes:'',textExtracted:text.substring(0,20000),
+        translatedText:'',translatedDate:null
+      };
+      await dbAdd(paper);
+    }catch(err){
+      console.error(err);
+      toast(`处理失败：${file.name}`,'error');
+    }
+  }
+  uploadZone.querySelector('h3').textContent='拖拽 PDF 文件到此处，或点击选择文件';
+  await loadPapers();
+  renderLibrary();
+  toast(`已成功添加 ${pdfs.length} 篇文献`,'success');
+}
+
+/* ========== 文献库 ========== */
+async function loadPapers(){allPapers=await dbGetAll()}
+function renderStats(){
+  const total=allPapers.length;
+  const en=allPapers.filter(p=>p.language==='en').length;
+  const zh=allPapers.filter(p=>p.language==='zh').length;
+  document.getElementById('statsBar').innerHTML=`
+    <div class="stat-card"><div class="stat-num">${total}</div><div class="stat-label">文献总数</div></div>
+    <div class="stat-card en"><div class="stat-num">${en}</div><div class="stat-label">英文文献</div></div>
+    <div class="stat-card zh"><div class="stat-num">${zh}</div><div class="stat-label">中文文献</div></div>
+    <div class="stat-card"><div class="stat-num">${total-en-zh}</div><div class="stat-label">其他/未识别</div></div>
+  `;
+}
+function renderTagFilter(){
+  const tags=new Set();
+  allPapers.forEach(p=>(p.tags||[]).forEach(t=>tags.add(t)));
+  const sel=document.getElementById('filterTag');
+  const cur=sel.value;
+  sel.innerHTML='<option value="all">全部标签</option>'+[...tags].sort().map(t=>`<option value="${t}">${t}</option>`).join('');
+  sel.value=cur||'all';
+}
+function getFilteredPapers(){
+  let list=[...allPapers];
+  if(filters.lang!=='all') list=list.filter(p=>p.language===filters.lang);
+  if(filters.tag!=='all') list=list.filter(p=>(p.tags||[]).includes(filters.tag));
+  if(filters.search){
+    const kw=filters.search.toLowerCase();
+    list=list.filter(p=>(p.title+' '+(p.tags||[]).join(' ')+' '+(p.source||'')).toLowerCase().includes(kw));
+  }
+  if(filters.sort==='date-desc') list.sort((a,b)=>new Date(b.dateAdded)-new Date(a.dateAdded));
+  else if(filters.sort==='date-asc') list.sort((a,b)=>new Date(a.dateAdded)-new Date(b.dateAdded));
+  else if(filters.sort==='title-asc') list.sort((a,b)=>(a.title||'').localeCompare(b.title||''));
+  return list;
+}
+function renderLibrary(){
+  renderStats();
+  renderTagFilter();
+  const list=getFilteredPapers();
+  const wrap=document.getElementById('paperGridWrap');
+  if(!list.length){
+    wrap.innerHTML='<div class="empty-state"><div class="e-icon">📂</div><p>文献库为空，拖入 PDF 文件即可开始整理</p></div>';
+    return;
+  }
+  wrap.innerHTML='<div class="paper-grid">'+list.map(p=>{
+    const langLabel=p.language==='en'?'英文':(p.language==='zh'?'中文':'其他');
+    const sizeStr=p.fileSize>1048576?(p.fileSize/1048576).toFixed(1)+' MB':Math.round(p.fileSize/1024)+' KB';
+    const dateStr=new Date(p.dateAdded).toLocaleDateString('zh-CN');
+    return `<div class="paper-card" onclick="openDetail(${p.id})">
+      <div class="p-header">
+        <span class="p-title">${escapeHtml(p.title||p.fileName)}</span>
+        <span class="lang-badge ${p.language}">${langLabel}</span>
+      </div>
+      <div class="p-tags">${(p.tags||[]).map(t=>`<span class="tag-chip">${escapeHtml(t)}</span>`).join('')}</div>
+      <div class="p-meta">
+        <span>📄 ${escapeHtml(p.fileName)}</span>
+        ${p.pages?`<span>📃 ${p.pages} 页 · ${sizeStr}</span>`:`<span>💾 ${sizeStr}</span>`}
+      </div>
+      <div class="p-footer">
+        <span>📥 ${dateStr}</span>
+        ${p.translatedText?'<span style="color:var(--accent)">✓ 已翻译</span>':''}
+      </div>
+    </div>`;
+  }).join('')+'</div>';
+}
+document.getElementById('paperSearch').addEventListener('input',e=>{filters.search=e.target.value;renderLibrary()});
+document.getElementById('filterLang').addEventListener('change',e=>{filters.lang=e.target.value;renderLibrary()});
+document.getElementById('filterTag').addEventListener('change',e=>{filters.tag=e.target.value;renderLibrary()});
+document.getElementById('sortBy').addEventListener('change',e=>{filters.sort=e.target.value;renderLibrary()});
+
+/* ========== 详情弹窗 ========== */
+async function openDetail(id){
+  currentPaper=await dbGet(id);
+  if(!currentPaper){toast('文献不存在','error');return}
+  renderDetail();
+  document.getElementById('detailModal').classList.add('active');
+}
+function closeModal(){document.getElementById('detailModal').classList.remove('active');currentPaper=null}
+document.getElementById('detailModal').addEventListener('click',e=>{if(e.target.id==='detailModal')closeModal()});
+
+function renderDetail(){
+  const p=currentPaper;
+  const langLabel=p.language==='en'?'英文':(p.language==='zh'?'中文':'其他');
+  const sizeStr=p.fileSize>1048576?(p.fileSize/1048576).toFixed(1)+' MB':Math.round(p.fileSize/1024)+' KB';
+  const dateStr=new Date(p.dateAdded).toLocaleString('zh-CN');
+  document.getElementById('detailBody').innerHTML=`
+    <div class="detail-row">
+      <div class="detail-field">
+        <label>标题</label>
+        <input type="text" id="editTitle" value="${escapeAttr(p.title||'')}">
+      </div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-field"><label>语言</label><select id="editLang">
+        <option value="en" ${p.language==='en'?'selected':''}>英文</option>
+        <option value="zh" ${p.language==='zh'?'selected':''}>中文</option>
+        <option value="other" ${p.language==='other'?'selected':''}>其他</option>
+      </select></div>
+      <div class="detail-field"><label>来源数据库</label><input type="text" id="editSource" value="${escapeAttr(p.source||'')}" placeholder="如 PubMed、知网…"></div>
+      <div class="detail-field"><label>添加时间</label><input type="text" value="${dateStr}" readonly></div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-field"><label>文件信息</label><input type="text" value="${escapeAttr(p.fileName)} · ${p.pages?p.pages+'页 · ':''}${sizeStr}" readonly></div>
+    </div>
+    <div class="detail-field">
+      <label>标签</label>
+      <div class="tags-row" id="tagsRow">
+        ${(p.tags||[]).map((t,i)=>`<span class="tag-pill">${escapeHtml(t)}<span class="remove" onclick="removeTag(${i})">×</span></span>`).join('')}
+        <input class="tag-add-input" id="tagInput" placeholder="添加标签…" onkeydown="if(event.key==='Enter'){addTag();event.preventDefault()}">
+      </div>
+    </div>
+    <div class="detail-field" style="margin-top:16px">
+      <label>笔记</label>
+      <textarea id="editNotes" placeholder="在此记录阅读笔记…">${escapeHtml(p.notes||'')}</textarea>
+    </div>
+    <div class="section-divider"></div>
+    <div class="section-divider-label">📄 提取的文本内容（前 ${Math.min((p.textExtracted||'').length,20000)} 字符）</div>
+    <div class="text-block" id="extractedText">${p.textExtracted?escapeHtml(p.textExtracted.substring(0,5000))+(p.textExtracted.length>5000?'\n\n…（文本已截断显示，完整文本已保存）':''):'（尚未提取文本）'}</div>
+    ${p.language==='en'||p.language==='other'?`
+      <div class="section-divider"></div>
+      <div class="section-divider-label">🌐 中文翻译${p.translatedText?`（${new Date(p.translatedDate).toLocaleString('zh-CN')}）`:''}</div>
+      ${p.translatedText?`<div class="text-block translated">${escapeHtml(p.translatedText)}</div>`:'<p style="font-size:13px;color:var(--text-light);margin-top:8px">点击下方「提取并翻译」按钮生成翻译</p>'}
+      <div class="progress-wrap" id="transProgress" style="display:none">
+        <div class="progress-bar"><div class="progress-fill" id="transFill" style="width:0%"></div></div>
+        <div class="progress-text" id="transProgressText">准备翻译…</div>
+      </div>
+    `:''}
+  `;
+  document.getElementById('detailFooter').innerHTML=`
+    ${p.language==='en'||p.language==='other'?`<button class="btn btn-primary btn-sm" onclick="translatePaper()">🌐 提取并翻译</button>`:''}
+    <button class="btn btn-outline btn-sm" onclick="openPDF()">📂 打开 PDF</button>
+    <button class="btn btn-outline btn-sm" onclick="copyText()">📋 复制文本</button>
+    <button class="btn btn-danger btn-sm" onclick="deletePaper()">🗑 删除</button>
+    <button class="btn btn-primary btn-sm" onclick="savePaper()">💾 保存修改</button>
+  `;
+}
+function escapeHtml(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function escapeAttr(s){return escapeHtml(s).replace(/"/g,'&quot;')}
+
+function syncFieldsFromDOM(){
+  const t=document.getElementById('editTitle');if(t)currentPaper.title=t.value.trim()||currentPaper.fileName;
+  const l=document.getElementById('editLang');if(l)currentPaper.language=l.value;
+  const s=document.getElementById('editSource');if(s)currentPaper.source=s.value.trim();
+  const n=document.getElementById('editNotes');if(n)currentPaper.notes=n.value;
+}
+function addTag(){
+  const inp=document.getElementById('tagInput');
+  const v=inp.value.trim();
+  if(!v)return;
+  syncFieldsFromDOM();
+  if(!currentPaper.tags)currentPaper.tags=[];
+  if(!currentPaper.tags.includes(v))currentPaper.tags.push(v);
+  renderDetail();
+}
+function removeTag(i){syncFieldsFromDOM();currentPaper.tags.splice(i,1);renderDetail()}
+async function savePaper(){
+  currentPaper.title=document.getElementById('editTitle').value.trim()||currentPaper.fileName;
+  currentPaper.language=document.getElementById('editLang').value;
+  currentPaper.source=document.getElementById('editSource').value.trim();
+  currentPaper.notes=document.getElementById('editNotes').value;
+  await dbUpdate(currentPaper);
+  await loadPapers();renderLibrary();
+  toast('已保存修改','success');
+}
+async function deletePaper(){
+  if(!confirm('确定删除该文献？此操作不可撤销。'))return;
+  await dbDelete(currentPaper.id);
+  await loadPapers();renderLibrary();
+  closeModal();
+  toast('已删除文献','success');
+}
+function openPDF(){
+  const url=URL.createObjectURL(currentPaper.fileBlob);
+  window.open(url,'_blank');
+  setTimeout(()=>URL.revokeObjectURL(url),120000);
+}
+function copyText(){
+  if(!currentPaper.textExtracted){toast('无文本可复制','error');return}
+  navigator.clipboard.writeText(currentPaper.textExtracted).then(()=>toast('文本已复制到剪贴板','success'));
+}
+
+/* ========== 翻译 ========== */
+function chunkText(str,size){
+  const chunks=[];let i=0;
+  while(i<str.length){chunks.push(str.substring(i,i+size));i+=size}
+  return chunks;
+}
+async function callTranslateAPI(text){
+  const url=`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|zh-CN`;
+  const res=await fetch(url);
+  const data=await res.json();
+  if(data.responseStatus===200||data.responseData){
+    return data.responseData.translatedText||text;
+  }
+  throw new Error(data.responseDetails||'翻译失败');
+}
+async function translatePaper(){
+  if(!currentPaper.textExtracted){toast('该文献无提取文本','error');return}
+  syncFieldsFromDOM();
+  const fullText=currentPaper.textExtracted;
+  const transLen=Math.min(fullText.length,6000);
+  const toTranslate=fullText.substring(0,transLen);
+  const prog=document.getElementById('transProgress');
+  const fill=document.getElementById('transFill');
+  const ptext=document.getElementById('transProgressText');
+  prog.style.display='block';
+  const chunks=chunkText(toTranslate,450);
+  let result='';
+  try{
+    for(let i=0;i<chunks.length;i++){
+      ptext.textContent=`正在翻译第 ${i+1}/${chunks.length} 段…`;
+      fill.style.width=((i+1)/chunks.length*100)+'%';
+      const tr=await callTranslateAPI(chunks[i]);
+      result+=tr+' ';
+      if(i<chunks.length-1) await new Promise(r=>setTimeout(r,400));
+    }
+    currentPaper.translatedText=result.trim();
+    currentPaper.translatedDate=new Date().toISOString();
+    await dbUpdate(currentPaper);
+    await loadPapers();renderLibrary();
+    renderDetail();
+    toast(`翻译完成（前 ${transLen} 字符）`,'success');
+  }catch(err){
+    ptext.textContent='翻译失败：'+err.message;
+    toast('翻译失败，请稍后重试或使用翻译工具链接','error');
+  }
+}
+
+/* 即时翻译工具 */
+document.getElementById('transBtn').addEventListener('click',async()=>{
+  const input=document.getElementById('transInput').value.trim();
+  const output=document.getElementById('transOutput');
+  const status=document.getElementById('transStatus');
+  if(!input){toast('请输入待翻译文本','error');return}
+  output.value='';status.textContent='正在翻译…';
+  const toTranslate=input.substring(0,450);
+  try{
+    const tr=await callTranslateAPI(toTranslate);
+    output.value=tr;
+    status.textContent=input.length>450?'（仅翻译了前 450 字符，请分段翻译更多）':'翻译完成';
+  }catch(err){
+    status.textContent='翻译失败：'+err.message;
+    toast('翻译失败，请稍后重试','error');
+  }
+});
+document.getElementById('transClearBtn').addEventListener('click',()=>{
+  document.getElementById('transInput').value='';
+  document.getElementById('transOutput').value='';
+  document.getElementById('transStatus').textContent='';
+});
+function renderTranslatorLinks(){
+  document.getElementById('translatorLinks').innerHTML=TRANSLATOR_LINKS.map(t=>
+    `<a class="translator-link" href="${t.url}" target="_blank" rel="noopener"><span style="font-size:18px">${t.icon}</span><span><strong>${t.name}</strong><br><span style="font-size:11px;color:var(--text-light)">${t.desc}</span></span></a>`
+  ).join('');
+}
+
+/* ========== Toast ========== */
+let toastTimer;
+function toast(msg,type='info'){
+  const el=document.getElementById('toast');
+  el.textContent=msg;
+  el.className='toast show '+type;
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>el.classList.remove('show'),3000);
+}
+
+/* ========== 初始化 ========== */
+async function init(){
+  try{
+    await openDB();
+    if(navigator.storage&&navigator.storage.persist){navigator.storage.persist()}
+  }catch(e){console.error('DB error',e);toast('数据库初始化失败','error')}
+  renderCatTabs();
+  renderDbGrid();
+  renderTranslatorLinks();
+  await loadPapers();
+  renderLibrary();
+}
+init();
+</script>
+</body>
+</html>
